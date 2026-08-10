@@ -1,0 +1,69 @@
+# SkillProof — Docker Compose
+# Starts PostgreSQL + Redis + FastAPI backend + React frontend
+
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: skillproof_postgres
+    environment:
+      POSTGRES_USER: skillproof
+      POSTGRES_PASSWORD: skillproof123
+      POSTGRES_DB: skillproof
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillproof"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: skillproof_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: skillproof_backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://skillproof:skillproof123@db:5432/skillproof
+      REDIS_URL: redis://redis:6379
+    env_file:
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: skillproof_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev -- --host
+
+volumes:
+  postgres_data:
+  redis_data:
